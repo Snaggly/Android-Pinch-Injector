@@ -11,11 +11,24 @@
 #include <math.h>
 #include <time.h>
 
+#define WRITE(fd,event) \
+    ret = write(*fd, &event, sizeof(event)); \
+    if (ret < sizeof(event)) { \
+    fprintf(stderr, "Write event failed: %s\n", strerror(errno)); \
+    close(*fd); \
+    return -1; \
+    }
+
 struct motion_range {
     struct input_absinfo ABS_MT_X_TRACKING;
     struct input_absinfo ABS_MT_Y_TRACKING;
     struct input_absinfo ABS_MT_PRESSURE_TRACKING;
 } motionRange;
+
+__s32 previousX1 = 0;
+__s32 previousY1 = 0;
+__s32 previousX2 = 0;
+__s32 previousY2 = 0;
 
 static int determine_touch_device(int *fd) {
     uint8_t *bits = NULL;
@@ -65,8 +78,7 @@ static int determine_touch_device(int *fd) {
             }
     }
     free(bits);
-    if (motionRange.ABS_MT_X_TRACKING.maximum > 0 && motionRange.ABS_MT_Y_TRACKING.maximum > 0
-        && motionRange.ABS_MT_PRESSURE_TRACKING.maximum > 0) {
+    if (motionRange.ABS_MT_X_TRACKING.maximum > 0 && motionRange.ABS_MT_Y_TRACKING.maximum > 0) {
         return 1;
     } else {
         *fd = 0;
@@ -108,102 +120,67 @@ int write_event_down(int *fd, __s32 x1, __s32 y1, __s32 x2, __s32 y2) {
     event.type = EV_ABS;
     event.code = ABS_MT_SLOT;
     event.value = 0x00;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
+    WRITE(fd, event)
     event.type = EV_ABS;
     event.code = ABS_MT_TRACKING_ID;
     event.value = 0x00;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+    WRITE(fd, event)
+
+    if (motionRange.ABS_MT_PRESSURE_TRACKING.maximum > 0) {
+        event.type = EV_ABS;
+        event.code = ABS_MT_PRESSURE;
+        event.value = motionRange.ABS_MT_PRESSURE_TRACKING.maximum;
+        WRITE(fd, event)
     }
-    event.type = EV_ABS;
-    event.code = ABS_MT_PRESSURE;
-    event.value = motionRange.ABS_MT_PRESSURE_TRACKING.maximum;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+
+    if (previousX1 != x1) {
+        previousX1 = x1;
+        event.type = EV_ABS;
+        event.code = ABS_MT_POSITION_X;
+        event.value = x1;
+        WRITE(fd, event)
     }
-    event.type = EV_ABS;
-    event.code = ABS_MT_POSITION_X;
-    event.value = x1;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
-    event.type = EV_ABS;
-    event.code = ABS_MT_POSITION_Y;
-    event.value = y1;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+    if (previousY1 != y1) {
+        previousY1 = y1;
+        event.type = EV_ABS;
+        event.code = ABS_MT_POSITION_Y;
+        event.value = y1;
+        WRITE(fd, event)
     }
     event.type = EV_ABS;
     event.code = ABS_MT_SLOT;
     event.value = 0x01;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
+    WRITE(fd, event)
     event.type = EV_ABS;
     event.code = ABS_MT_TRACKING_ID;
     event.value = 0x01;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+    WRITE(fd, event)
+
+    if (motionRange.ABS_MT_PRESSURE_TRACKING.maximum > 0) {
+        event.type = EV_ABS;
+        event.code = ABS_MT_PRESSURE;
+        event.value = motionRange.ABS_MT_PRESSURE_TRACKING.maximum;
+        WRITE(fd, event)
     }
-    event.type = EV_ABS;
-    event.code = ABS_MT_PRESSURE;
-    event.value = motionRange.ABS_MT_PRESSURE_TRACKING.maximum;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+
+    if (previousX2 != x2) {
+        previousX2 = x2;
+        event.type = EV_ABS;
+        event.code = ABS_MT_POSITION_X;
+        event.value = x2;
+        WRITE(fd, event)
     }
-    event.type = EV_ABS;
-    event.code = ABS_MT_POSITION_X;
-    event.value = x2;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
-    event.type = EV_ABS;
-    event.code = ABS_MT_POSITION_Y;
-    event.value = y2;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+    if (previousY2 != y2) {
+        previousY2 = y2;
+        event.type = EV_ABS;
+        event.code = ABS_MT_POSITION_Y;
+        event.value = y2;
+        WRITE(fd, event)
     }
     event.type = EV_SYN;
     event.code = SYN_REPORT;
     event.value = 0;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
+    WRITE(fd, event)
     return 0;
 }
 
@@ -221,66 +198,45 @@ int write_event_move(int *fd, __s32 x1, __s32 y1, __s32 x2, __s32 y2) {
     event.type = EV_ABS;
     event.code = ABS_MT_SLOT;
     event.value = 0x00;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+    WRITE(fd, event)
+
+    if (previousX1 != x1) {
+        previousX1 = x1;
+        event.type = EV_ABS;
+        event.code = ABS_MT_POSITION_X;
+        event.value = x1;
+        WRITE(fd, event)
     }
-    event.type = EV_ABS;
-    event.code = ABS_MT_POSITION_X;
-    event.value = x1;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
-    event.type = EV_ABS;
-    event.code = ABS_MT_POSITION_Y;
-    event.value = y1;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+    if (previousY1 != y1) {
+        previousY1 = y1;
+        event.type = EV_ABS;
+        event.code = ABS_MT_POSITION_Y;
+        event.value = y1;
+        WRITE(fd, event)
     }
     event.type = EV_ABS;
     event.code = ABS_MT_SLOT;
     event.value = 0x01;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+    WRITE(fd, event)
+
+    if (previousX2 != x2) {
+        previousX2 = x2;
+        event.type = EV_ABS;
+        event.code = ABS_MT_POSITION_X;
+        event.value = x2;
+        WRITE(fd, event)
     }
-    event.type = EV_ABS;
-    event.code = ABS_MT_POSITION_X;
-    event.value = x2;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
-    event.type = EV_ABS;
-    event.code = ABS_MT_POSITION_Y;
-    event.value = y2;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+    if (previousY2 != y2) {
+        previousY2 = y2;
+        event.type = EV_ABS;
+        event.code = ABS_MT_POSITION_Y;
+        event.value = y2;
+        WRITE(fd, event)
     }
     event.type = EV_SYN;
     event.code = SYN_REPORT;
     event.value = 0;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
+    WRITE(fd, event)
     return 0;
 }
 
@@ -300,66 +256,37 @@ int write_event_up(int *fd) {
     event.type = EV_ABS;
     event.code = ABS_MT_SLOT;
     event.value = 0x00;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
-    event.type = EV_ABS;
-    event.code = ABS_MT_PRESSURE;
-    event.value = motionRange.ABS_MT_PRESSURE_TRACKING.minimum;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+    WRITE(fd, event)
+
+    if (motionRange.ABS_MT_PRESSURE_TRACKING.maximum > 0) {
+        event.type = EV_ABS;
+        event.code = ABS_MT_PRESSURE;
+        event.value = motionRange.ABS_MT_PRESSURE_TRACKING.minimum;
+        WRITE(fd, event)
     }
     event.type = EV_ABS;
     event.code = ABS_MT_TRACKING_ID;
     event.value = -0x01;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
+    WRITE(fd, event)
     event.type = EV_ABS;
     event.code = ABS_MT_SLOT;
     event.value = 0x01;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
-    event.type = EV_ABS;
-    event.code = ABS_MT_PRESSURE;
-    event.value = motionRange.ABS_MT_PRESSURE_TRACKING.minimum;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
+    WRITE(fd, event)
+
+    if (motionRange.ABS_MT_PRESSURE_TRACKING.maximum > 0) {
+        event.type = EV_ABS;
+        event.code = ABS_MT_PRESSURE;
+        event.value = motionRange.ABS_MT_PRESSURE_TRACKING.minimum;
+        WRITE(fd, event)
     }
     event.type = EV_ABS;
     event.code = ABS_MT_TRACKING_ID;
     event.value = -0x01;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
+    WRITE(fd, event)
     event.type = EV_SYN;
     event.code = SYN_REPORT;
     event.value = 0;
-    ret = write(*fd, &event, sizeof(event));
-    if (ret < sizeof(event)) {
-        fprintf(stderr, "Write event failed: %s\n", strerror(errno));
-        close(*fd);
-        return -1;
-    }
+    WRITE(fd, event)
     return 0;
 }
 
