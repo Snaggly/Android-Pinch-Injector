@@ -9,6 +9,7 @@
 #include <linux/input.h>
 #include <sys/types.h>
 #include <math.h>
+#include <time.h>
 
 struct motion_range {
     struct input_absinfo ABS_MT_X_TRACKING;
@@ -362,6 +363,10 @@ int write_event_up(int *fd) {
     return 0;
 }
 
+__s32 lerp(__s32 start, __s32 end, double alpha) {
+    return (end - start) * alpha + start;
+}
+
 int main(int argc, char *argv[]) {
     int fd;
     char *endptr;
@@ -422,36 +427,59 @@ int main(int argc, char *argv[]) {
     __s32 startPointY = midpointY + (halfSizeY * (from / 100.0) * yShift);
     __s32 startPointX2 = midpointX - (halfSizeX * (from / 100.0) * xShift);
     __s32 startPointY2 = midpointY - (halfSizeY * (from / 100.0) * yShift);
-
-
-    int direction;
-    int totalSteps;
-    if (to > from) {
-        direction = 1;
-        totalSteps = to - from;
-    } else {
-        direction = -1;
-        totalSteps = from - to;
-    }
-    int intervalInUS = (1000 * duration) / totalSteps;
+    __s32 endPointX = midpointX + (halfSizeX * (to / 100.0) * xShift);
+    __s32 endPointY = midpointY + (halfSizeY * (to / 100.0) * yShift);
+    __s32 endPointX2 = midpointX - (halfSizeX * (to / 100.0) * xShift);
+    __s32 endPointY2 = midpointY - (halfSizeY * (to / 100.0) * yShift);
 
     ret = write_event_down(&fd, startPointX, startPointY, startPointX2, startPointY2);
     if (ret < 0) {
         return 1;
     }
 
-    for (int step = 1; step <= totalSteps; step++) {
-        __s32 pointX = startPointX + direction * (halfSizeX * (step / 100.0) * xShift);
-        __s32 pointY = startPointY + direction * (halfSizeY * (step / 100.0) * yShift);
-        __s32 pointX2 = startPointX2 + direction * -(halfSizeX * (step / 100.0) * xShift);
-        __s32 pointY2 = startPointY2 + direction * -(halfSizeY * (step / 100.0) * yShift);
-        ret = write_event_move(&fd, pointX, pointY, pointX2, pointY2);
-        if (ret < 0) {
-            return 1;
+    if (duration > 400) {
+        clock_t down, end, when;
+        double elapsed, alpha;
+        down = clock();
+        end = ((duration * CLOCKS_PER_SEC) / 1000) + down;
+        when = clock();
+        while (when < end) {
+            elapsed = (double) (when - down) * 1000 / CLOCKS_PER_SEC;
+            alpha = elapsed / duration;
+            __s32 pointX = lerp(startPointX, endPointX, alpha);
+            __s32 pointY = lerp(startPointY, endPointY, alpha);
+            __s32 pointX2 = lerp(startPointX2, endPointX2, alpha);
+            __s32 pointY2 = lerp(startPointY2, endPointY2, alpha);
+            ret = write_event_move(&fd, pointX, pointY, pointX2, pointY2);
+            if (ret < 0) {
+                return 1;
+            }
+            when = clock();
         }
-        usleep(intervalInUS);
+    } else {
+        int direction;
+        int totalSteps;
+        if (to > from) {
+            direction = 1;
+            totalSteps = to - from;
+        } else {
+            direction = -1;
+            totalSteps = from - to;
+        }
+        int intervalInUS = (1000 * duration) / totalSteps;
+        for (int step = 1; step <= totalSteps; step++) {
+            __s32 pointX = startPointX + direction * (halfSizeX * (step / 100.0) * xShift);
+            __s32 pointY = startPointY + direction * (halfSizeY * (step / 100.0) * yShift);
+            __s32 pointX2 = startPointX2 + direction * -(halfSizeX * (step / 100.0) * xShift);
+            __s32 pointY2 = startPointY2 + direction * -(halfSizeY * (step / 100.0) * yShift);
+            ret = write_event_move(&fd, pointX, pointY, pointX2, pointY2);
+            if (ret < 0) {
+                return 1;
+            }
+            usleep(intervalInUS);
+        }
     }
-    
+
     ret = write_event_up(&fd);
     if (ret < 0) {
         return 1;
