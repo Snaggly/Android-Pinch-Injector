@@ -133,20 +133,16 @@ int write_event_down(int *fd, __s32 x1, __s32 y1, __s32 x2, __s32 y2) {
         WRITE(fd, event)
     }
 
-    if (previousX1 != x1) {
-        previousX1 = x1;
-        event.type = EV_ABS;
-        event.code = ABS_MT_POSITION_X;
-        event.value = x1;
-        WRITE(fd, event)
-    }
-    if (previousY1 != y1) {
-        previousY1 = y1;
-        event.type = EV_ABS;
-        event.code = ABS_MT_POSITION_Y;
-        event.value = y1;
-        WRITE(fd, event)
-    }
+    previousX1 = x1;
+    event.type = EV_ABS;
+    event.code = ABS_MT_POSITION_X;
+    event.value = x1;
+    WRITE(fd, event)
+    previousY1 = y1;
+    event.type = EV_ABS;
+    event.code = ABS_MT_POSITION_Y;
+    event.value = y1;
+    WRITE(fd, event)
     event.type = EV_ABS;
     event.code = ABS_MT_SLOT;
     event.value = 0x01;
@@ -359,54 +355,33 @@ int main(int argc, char *argv[]) {
     __s32 endPointX2 = midpointX - (halfSizeX * (to / 100.0) * xShift);
     __s32 endPointY2 = midpointY - (halfSizeY * (to / 100.0) * yShift);
 
+    //Start - Fingers Down
     ret = write_event_down(&fd, startPointX, startPointY, startPointX2, startPointY2);
     if (ret < 0) {
         return 1;
     }
 
-    if (duration > 400) {
-        clock_t down, end, when;
-        double elapsed, alpha;
-        down = clock();
-        end = ((duration * CLOCKS_PER_SEC) / 1000) + down;
+    //Move - Fingers Move
+    clock_t down, end, when;
+    double elapsed, alpha;
+    down = clock();
+    end = ((duration * CLOCKS_PER_SEC) / 1000.0) + down;
+    when = clock();
+    while (when < end) {
+        elapsed = (double) (when - down) * 1000.0 / CLOCKS_PER_SEC;
+        alpha = elapsed / duration;
+        __s32 pointX = lerp(startPointX, endPointX, alpha);
+        __s32 pointY = lerp(startPointY, endPointY, alpha);
+        __s32 pointX2 = lerp(startPointX2, endPointX2, alpha);
+        __s32 pointY2 = lerp(startPointY2, endPointY2, alpha);
+        ret = write_event_move(&fd, pointX, pointY, pointX2, pointY2);
+        if (ret < 0) {
+            return 1;
+        }
         when = clock();
-        while (when < end) {
-            elapsed = (double) (when - down) * 1000 / CLOCKS_PER_SEC;
-            alpha = elapsed / duration;
-            __s32 pointX = lerp(startPointX, endPointX, alpha);
-            __s32 pointY = lerp(startPointY, endPointY, alpha);
-            __s32 pointX2 = lerp(startPointX2, endPointX2, alpha);
-            __s32 pointY2 = lerp(startPointY2, endPointY2, alpha);
-            ret = write_event_move(&fd, pointX, pointY, pointX2, pointY2);
-            if (ret < 0) {
-                return 1;
-            }
-            when = clock();
-        }
-    } else {
-        int direction;
-        int totalSteps;
-        if (to > from) {
-            direction = 1;
-            totalSteps = to - from;
-        } else {
-            direction = -1;
-            totalSteps = from - to;
-        }
-        int intervalInUS = (1000 * duration) / totalSteps;
-        for (int step = 1; step <= totalSteps; step++) {
-            __s32 pointX = startPointX + direction * (halfSizeX * (step / 100.0) * xShift);
-            __s32 pointY = startPointY + direction * (halfSizeY * (step / 100.0) * yShift);
-            __s32 pointX2 = startPointX2 + direction * -(halfSizeX * (step / 100.0) * xShift);
-            __s32 pointY2 = startPointY2 + direction * -(halfSizeY * (step / 100.0) * yShift);
-            ret = write_event_move(&fd, pointX, pointY, pointX2, pointY2);
-            if (ret < 0) {
-                return 1;
-            }
-            usleep(intervalInUS);
-        }
     }
 
+    //End - Fingers Up
     ret = write_event_up(&fd);
     if (ret < 0) {
         return 1;
